@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Persistent storage & logs
+data/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChronoSearch | State-of-the-Art Web Search & Temporal Memory Agent</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Lightweight Markdown parser from CDN with fallback -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="logo-icon">⚡</div>
+          <div class="brand-text">
+            <h2>ChronoSearch</h2>
+            <span class="subtext">Temporal Memory & Search Agent</span>
+          </div>
+        </div>
+        <button id="new-chat-btn" class="btn btn-primary" title="Start a fresh chat thread">
+          <span>+</span> New Chat
+        </button>
+      </div>
+
+      <div class="temporal-status-card">
+        <div class="card-label">CURRENT SYSTEM TIME</div>
+        <div id="system-time-display" class="time-value">Loading...</div>
+        <div id="relative-anchor-preview" class="anchor-value">Grounding: Live Node Clock</div>
+      </div>
+
+      <div class="quick-test-section">
+        <div class="section-title">EVALUATION DATASET PROMPTS</div>
+        <div class="quick-prompts">
+          <button class="prompt-chip" data-prompt="On Monday we shortlisted 5 CRM tools for a 20-person sales team. Has any of them changed pricing or shipped something big since?">
+            <span class="chip-icon">📊</span>
+            <span class="chip-text">5 CRM Tools Shortlist (Pricing & Releases)</span>
+          </button>
+          <button class="prompt-chip" data-prompt="What did I ask you on 3 November? Is your answer still correct today?">
+            <span class="chip-icon">📅</span>
+            <span class="chip-text">3 November Recall & Staleness Check</span>
+          </button>
+          <button class="prompt-chip" data-prompt="Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?">
+            <span class="chip-icon">🐘</span>
+            <span class="chip-text">Postgres Hosting Delta (Last Tuesday)</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="sessions-section">
+        <div class="section-title">EPISODIC SESSIONS</div>
+        <div id="sessions-list" class="sessions-list">
+          <!-- Session items loaded dynamically -->
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="tech-stack-badge">
+          <span>Node.js • TypeScript • Parallel Search</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Chat Workspace -->
+    <main class="chat-workspace">
+      <!-- Chat Header -->
+      <header class="chat-header">
+        <div class="header-info">
+          <h1 id="active-chat-title">New Conversation</h1>
+          <div class="header-status">
+            <span class="pulse-indicator"></span>
+            <span id="llm-provider-label">Agent Ready</span>
+            <span class="separator">•</span>
+            <span id="search-provider-label">Web Search Active</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Message Container -->
+      <section id="chat-messages" class="chat-messages">
+        <!-- Welcome empty state -->
+        <div id="empty-state" class="empty-state">
+          <div class="empty-icon">🌐</div>
+          <h2>Welcome to ChronoSearch</h2>
+          <p>The state-of-the-art web search agent with episodic memory and temporal grounding.</p>
+          <p class="empty-subtext">Click any of the evaluation dataset prompts on the left or type your own question below.</p>
+        </div>
+      </section>
+
+      <!-- Live Agent Activity Floating Bar -->
+      <div id="agent-activity-bar" class="agent-activity-bar hidden">
+        <div class="spinner"></div>
+        <span id="activity-step-text">Processing query...</span>
+        <div id="activity-pills" class="activity-pills"></div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <footer class="chat-input-container">
+        <form id="chat-form" class="chat-form">
+          <textarea
+            id="chat-input"
+            rows="1"
+            placeholder="Ask anything... e.g. 'Has any pricing changed for our shortlisted CRM tools since Monday?'"
+            required
+          ></textarea>
+          <button type="submit" id="send-btn" class="send-button" title="Send message">
+            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </form>
+        <div class="input-hint">
+          <span>Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for a new line. Answers fast, gets things right.</span>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
