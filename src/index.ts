@@ -89,7 +89,7 @@ app.post('/api/chat', async (req: Request, res: Response) => {
 });
 
 // Fallback to index.html for client-side routing
-app.get('*', (_req: Request, res: Response) => {
+app.use((_req: Request, res: Response) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
