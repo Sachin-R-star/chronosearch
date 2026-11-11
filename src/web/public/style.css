@@ -626,3 +626,44 @@ body {
   font-size: 12px;
 }
 
+.message-bubble table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 13px;
+  background: rgba(18, 21, 27, 0.6);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.message-bubble th {
+  background: #1c2230;
+  color: #fff;
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.message-bubble td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  vertical-align: top;
+}
+
+.message-bubble tr:last-child td {
+  border-bottom: none;
+}
+
+.message-bubble tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.message-bubble blockquote {
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 12px;
+  color: var(--text-muted);
+  margin: 10px 0;
+}

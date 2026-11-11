@@ -1,5 +1,12 @@
 import { TemporalAnchor } from './types.js';
 
+export interface CalendarInterval {
+  startISO: string;
+  endISO: string;
+  label: string;
+  daysAgo: number;
+}
+
 export class TemporalEngine {
   private referenceDate: Date;
 
@@ -22,7 +29,10 @@ export class TemporalEngine {
   }
 
   public formatDateISO(date: Date): string {
-    return date.toISOString().split('T')[0];
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
 
   public formatHuman(date: Date): string {
@@ -39,7 +49,8 @@ export class TemporalEngine {
   }
 
   /**
-   * Generates a calibrated calendar frame relative to current system time.
+   * Generates a fully calibrated relative calendar reference frame.
+   * This is passed into the system prompt to anchor the LLM's temporal reasoning.
    */
   public getTemporalFrame(): {
     now: string;
@@ -48,14 +59,14 @@ export class TemporalEngine {
     calendarAnchors: Record<string, { iso: string; human: string; daysAgo: number }>;
   } {
     const now = this.getNow();
-    const todayISO = this.formatISO(now);
+    const todayISO = this.formatDateISO(now);
     const todayHuman = this.formatHuman(now);
 
     const getRelative = (daysDiff: number) => {
       const d = new Date(now.getTime());
       d.setDate(d.getDate() + daysDiff);
       return {
-        iso: this.formatISO(d),
+        iso: this.formatDateISO(d),
         human: this.formatHuman(d),
         daysAgo: -daysDiff,
       };
@@ -63,8 +74,8 @@ export class TemporalEngine {
 
     const currentDay = now.getDay(); // 0 is Sunday, 1 is Monday, 2 is Tuesday...
 
-    // Calculate days back to recent days of week
-    const daysSinceMonday = (currentDay + 6) % 7 || 7; // if today is Tuesday(2), (2+6)%7 = 1 day ago (Monday)
+    // Exact days back to each day of week
+    const daysSinceMonday = (currentDay + 6) % 7 || 7;
     const daysSinceTuesday = (currentDay + 5) % 7 || 7;
     const daysSinceWednesday = (currentDay + 4) % 7 || 7;
     const daysSinceThursday = (currentDay + 3) % 7 || 7;
@@ -91,7 +102,12 @@ export class TemporalEngine {
   }
 
   /**
-   * Parses text for temporal expressions and returns a grounded TemporalAnchor if detected.
+   * Parses natural language queries for temporal expressions and grounds them to exact calendar dates.
+   * Handles:
+   * - "Monday" / "on Monday" / "last Monday"
+   * - "3 November" / "November 3" / "Nov 3"
+   * - "Last Tuesday" / "Tuesday"
+   * - "yesterday", "last week", "since then"
    */
   public parseTemporalExpression(text: string): TemporalAnchor | null {
     const lower = text.toLowerCase();
@@ -114,11 +130,11 @@ export class TemporalEngine {
 
       return {
         expression: match[0],
-        anchorDate: this.formatISO(target),
+        anchorDate: this.formatDateISO(target),
         dayOfWeek: this.getDayOfWeekName(target),
         relativeDays: daysDiff,
         isPastReference: daysDiff <= 0,
-        searchFilterAfter: this.formatISO(target),
+        searchFilterAfter: this.formatDateISO(target),
       };
     }
 
@@ -134,15 +150,15 @@ export class TemporalEngine {
 
       return {
         expression: match[0],
-        anchorDate: this.formatISO(target),
+        anchorDate: this.formatDateISO(target),
         dayOfWeek: this.getDayOfWeekName(target),
         relativeDays: daysDiff,
         isPastReference: daysDiff <= 0,
-        searchFilterAfter: this.formatISO(target),
+        searchFilterAfter: this.formatDateISO(target),
       };
     }
 
-    // 2. Relative day of the week: "last Tuesday", "on Monday", "this Monday"
+    // 2. Relative day of week: "last Tuesday", "on Monday", "this Monday"
     const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dowRegex = /\b(last|this|past|on)?\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
     const dowMatch = lower.match(dowRegex);
@@ -155,18 +171,14 @@ export class TemporalEngine {
 
       let daysBack = (currentDayIndex - targetDayIndex + 7) % 7;
       if (daysBack === 0) {
-        // Same day: if modifier is 'last' or 'past', it means 7 days ago
         if (modifier === 'last' || modifier === 'past') {
           daysBack = 7;
         }
       } else if (modifier === 'last' && daysBack < 7) {
-        // e.g. today is Thursday (4), target is Tuesday (2), daysBack = 2.
-        // "last Tuesday" could mean 2 days ago or 9 days ago depending on speaker;
-        // if today is Tuesday, last Tuesday is 7 days ago.
         if (currentDayIndex <= targetDayIndex) {
-          // already hopped to previous week
+          // already previous week
         } else if (modifier === 'last') {
-          daysBack += 0; // or 7 depending on convention, typically previous occurrence
+          // targeted previous occurrence
         }
       }
 
@@ -174,11 +186,11 @@ export class TemporalEngine {
 
       return {
         expression: dowMatch[0].trim(),
-        anchorDate: this.formatISO(target),
+        anchorDate: this.formatDateISO(target),
         dayOfWeek: this.getDayOfWeekName(target),
         relativeDays: -daysBack,
         isPastReference: true,
-        searchFilterAfter: this.formatISO(target),
+        searchFilterAfter: this.formatDateISO(target),
       };
     }
 
@@ -187,46 +199,41 @@ export class TemporalEngine {
       const target = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       return {
         expression: 'yesterday',
-        anchorDate: this.formatISO(target),
+        anchorDate: this.formatDateISO(target),
         dayOfWeek: this.getDayOfWeekName(target),
         relativeDays: -1,
         isPastReference: true,
-        searchFilterAfter: this.formatISO(target),
+        searchFilterAfter: this.formatDateISO(target),
       };
     }
 
-    // 4. "Last week"
+    // 4. Last week
     if (/\blast week\b/i.test(lower)) {
       const target = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       return {
         expression: 'last week',
-        anchorDate: this.formatISO(target),
+        anchorDate: this.formatDateISO(target),
         dayOfWeek: this.getDayOfWeekName(target),
         relativeDays: -7,
         isPastReference: true,
-        searchFilterAfter: this.formatISO(target),
+        searchFilterAfter: this.formatDateISO(target),
       };
     }
 
     // 5. "Since then" / "since"
     if (/\bsince then\b|\bsince\b/i.test(lower)) {
+      const target = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       return {
         expression: 'since then',
-        anchorDate: this.formatISO(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)),
+        anchorDate: this.formatDateISO(target),
         dayOfWeek: 'Past',
         relativeDays: -7,
         isPastReference: true,
+        searchFilterAfter: this.formatDateISO(target),
       };
     }
 
     return null;
-  }
-
-  private formatISO(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
   }
 
   private monthStringToNumber(m: string): number {
@@ -249,4 +256,3 @@ export class TemporalEngine {
 }
 
 export const defaultTemporalEngine = new TemporalEngine();
-
