@@ -11,7 +11,7 @@ export class GeminiProvider implements LLMProvider {
   }
 
   public isAvailable(): boolean {
-    return Boolean(this.apiKey && this.apiKey.trim().length > 0);
+    return Boolean(this.apiKey && this.apiKey.trim().length > 0 && !this.apiKey.includes('your_gemini_api_key'));
   }
 
   private formatContents(messages: LLMMessage[]): { contents: any[]; systemInstruction?: any } {

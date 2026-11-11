@@ -116,3 +116,4 @@ Our architectural decisions were guided by the three core hiring criteria:
 
 4. **Multi-Turn Entity Graph**:
    Maintain an evolving entity-relationship graph in SQLite across months of chat, tracking team size (e.g., "20 reps"), technology constraints, and pricing history as first-class relational records.
+

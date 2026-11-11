@@ -32,3 +32,4 @@ test('WebSearchTool deduplicates results across queries', () => {
   assert.strictEqual(deduplicated[1].url, 'https://pipedrive.com/pricing');
   assert.strictEqual(deduplicated[2].url, 'https://hubspot.com/new');
 });
+

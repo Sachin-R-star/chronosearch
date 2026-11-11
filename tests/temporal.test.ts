@@ -40,3 +40,4 @@ test('TemporalEngine generates calibrated relative frame', () => {
   assert.strictEqual(frame.calendarAnchors['yesterday'].iso, '2026-11-09');
   assert.strictEqual(frame.calendarAnchors['last tuesday'].iso, '2026-11-03');
 });
+

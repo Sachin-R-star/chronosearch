@@ -67,7 +67,7 @@ async function fetchStatus() {
 
     if (data.temporal) {
       systemTimeDisplayEl.textContent = data.temporal.todayHuman;
-      relativeAnchorPreviewEl.textContent = `Today: ${data.temporal.todayISO} (${data.temporal.now.slice(11, 16)} UTC)`;
+      relativeAnchorPreviewEl.textContent = `Live Clock: ${data.temporal.todayISO} (${data.temporal.now.slice(11, 16)} UTC)`;
     }
 
     if (data.llm) {
@@ -88,7 +88,6 @@ async function loadSessions() {
     renderSessionsList(sessions);
 
     if (sessions.length > 0 && !currentSessionId) {
-      // Default to first session or keep new chat
       selectSession(sessions[0].id);
     }
   } catch (err) {
@@ -128,7 +127,7 @@ async function selectSession(sessionId) {
     const session = await res.json();
     activeChatTitleEl.textContent = session.title;
     renderMessages(session.messages);
-    loadSessions(); // update active state in list
+    loadSessions();
   } catch (err) {
     console.error('Failed to load session details:', err);
   }
@@ -142,7 +141,7 @@ function startNewChat() {
       <div class="empty-icon">🌐</div>
       <h2>Fresh Chat Session</h2>
       <p>Ask anything or test episodic recall against past sessions.</p>
-      <p class="empty-subtext">Click any prompt on the left to begin.</p>
+      <p class="empty-subtext">Click any evaluation prompt on the left or type your own question.</p>
     </div>
   `;
   document.querySelectorAll('.session-item').forEach((el) => el.classList.remove('active'));
@@ -191,7 +190,7 @@ function appendMessageElement(msg) {
   const meta = document.createElement('div');
   meta.className = 'message-meta';
   const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
-  const latencyStr = msg.metadata?.latencyMs ? ` • ${Math.round(msg.metadata.latencyMs)}ms` : '';
+  const latencyStr = msg.metadata?.latencyMs ? ` • ${Math.round(msg.metadata.latencyMs)}ms total` : '';
   meta.textContent = `${msg.role.toUpperCase()} • ${timeStr}${latencyStr}`;
 
   container.appendChild(bubble);
@@ -206,7 +205,7 @@ function buildActivityCard(metadata) {
     items.push(`
       <div class="activity-item">
         <span class="activity-icon">🕒</span>
-        <div>Anchored: <strong>${metadata.temporalAnchor.expression}</strong> &rarr; <span class="activity-badge">${metadata.temporalAnchor.anchorDate} (${metadata.temporalAnchor.dayOfWeek})</span></div>
+        <div>Temporal Anchoring: <strong>"${escapeHtml(metadata.temporalAnchor.expression)}"</strong> &rarr; <span class="activity-badge">${metadata.temporalAnchor.anchorDate} (${metadata.temporalAnchor.dayOfWeek})</span></div>
       </div>
     `);
   }
@@ -215,7 +214,7 @@ function buildActivityCard(metadata) {
     items.push(`
       <div class="activity-item">
         <span class="activity-icon">🔍</span>
-        <div>Web Search (${metadata.searchQueries.length} parallel): ${metadata.searchQueries.map((q) => `<span class="activity-badge">${escapeHtml(q)}</span>`).join(' ')}</div>
+        <div>Parallel Web Search (${metadata.searchQueries.length} queries): ${metadata.searchQueries.map((q) => `<span class="activity-badge">${escapeHtml(q)}</span>`).join(' ')}</div>
       </div>
     `);
   }
@@ -230,13 +229,25 @@ function buildActivityCard(metadata) {
     `);
   }
 
+  if (metadata.latencyBreakdown) {
+    const b = metadata.latencyBreakdown;
+    items.push(`
+      <div class="activity-item">
+        <span class="activity-icon">⚡</span>
+        <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim);">
+          Latency: Temporal: ${b.temporalMs}ms | Memory: ${b.memoryMs}ms | Search: ${b.searchMs}ms | Scrape: ${b.scrapeMs}ms | Synthesis: ${b.llmFirstTokenMs}ms | Total: <strong>${b.totalMs}ms</strong>
+        </div>
+      </div>
+    `);
+  }
+
   if (items.length === 0) return '';
 
   return `
     <div class="activity-card">
       <div class="activity-card-header" onclick="this.parentElement.classList.toggle('collapsed')">
-        <span>⚡ Agent Execution & Temporal Trace</span>
-        <span>&dtrif;</span>
+        <span>⚡ Agent Execution & Latency Trace</span>
+        <span class="accordion-toggle">&dtrif;</span>
       </div>
       <div class="activity-card-body">
         ${items.join('')}
@@ -276,7 +287,6 @@ async function handleSubmit() {
   chatInputEl.value = '';
   chatInputEl.style.height = 'auto';
 
-  // Remove empty state if present
   const emptyState = document.getElementById('empty-state');
   if (emptyState) emptyState.remove();
 
@@ -373,7 +383,6 @@ async function handleSubmit() {
       }
     }
 
-    // Finalize bubble
     contentDiv.innerHTML = renderMarkdown(streamedText);
     hideActivityBar();
 
@@ -416,6 +425,10 @@ function handleAgentEvent(event, ctx) {
       showActivityBar(`✨ Found ${event.data.resultCount} sources (${event.data.totalLatencyMs}ms)`);
       break;
 
+    case 'page_scraped':
+      showActivityBar(`📄 Scraped ${event.data.scrapedCount} pages (${event.data.latencyMs}ms)`);
+      break;
+
     case 'delta_computed':
       showActivityBar(`⚖️ Delta Check: ${event.data.hasChanges ? 'Changes detected' : 'Unchanged'}`);
       break;
@@ -449,7 +462,6 @@ function renderMarkdown(text) {
   if (window.marked && typeof window.marked.parse === 'function') {
     return window.marked.parse(text);
   }
-  // Simple fallback
   return text
     .replace(/\n\n/g, '<br><br>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')

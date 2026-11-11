@@ -4,6 +4,8 @@ export interface ScrapedPage {
   url: string;
   title: string;
   text: string;
+  tables: string[];
+  recentDates: string[];
   success: boolean;
 }
 
@@ -29,42 +31,65 @@ export class PageScraper {
       });
 
       if (!res.ok) {
-        return { url, title: '', text: '', success: false };
+        return { url, title: '', text: '', tables: [], recentDates: [], success: false };
       }
 
       const html = await res.text();
       const $ = cheerio.load(html);
+
+      // Extract publication dates
+      const recentDates: string[] = [];
+      $('time, [datetime], meta[property*="time"], meta[name*="date"]').each((_, el) => {
+        const dt = $(el).attr('datetime') || $(el).attr('content') || $(el).text().trim();
+        if (dt && dt.length >= 8 && dt.length <= 30) {
+          recentDates.push(dt);
+        }
+      });
+
+      // Extract structured pricing tables or comparison grids
+      const tables: string[] = [];
+      $('table, [role="table"], [class*="pricing-table"], [class*="pricing-grid"]').each((_, el) => {
+        if (tables.length >= 2) return;
+        const rows: string[] = [];
+        $(el).find('tr, [role="row"]').each((_, row) => {
+          const cells = $(row).find('th, td, [role="cell"]').map((_, cell) => $(cell).text().trim().replace(/\s+/g, ' ')).get();
+          if (cells.length > 0) {
+            rows.push(cells.join(' | '));
+          }
+        });
+        if (rows.length > 1) {
+          tables.push(rows.slice(0, 8).join('\n'));
+        }
+      });
 
       // Strip non-content elements
       $('script, style, noscript, nav, header, footer, svg, iframe, .cookie-banner, .advertisement').remove();
 
       const title = $('title').text().trim() || $('h1').first().text().trim();
 
-      // Extract main content or body text
+      // Extract main text
       let text = $('main, article, [role="main"]').text().trim();
       if (!text || text.length < 100) {
         text = $('body').text().trim();
       }
 
-      // Normalize whitespace
-      const cleanText = text.replace(/\s+/g, ' ').slice(0, 3000); // Keep top 3k chars for fast LLM ingestion
+      const cleanText = text.replace(/\s+/g, ' ').slice(0, 3000);
 
       return {
         url,
         title,
         text: cleanText,
+        tables,
+        recentDates: recentDates.slice(0, 3),
         success: cleanText.length > 50,
       };
     } catch {
-      return { url, title: '', text: '', success: false };
+      return { url, title: '', text: '', tables: [], recentDates: [], success: false };
     } finally {
       clearTimeout(timeout);
     }
   }
 
-  /**
-   * Scrapes multiple URLs in parallel with strict timeout.
-   */
   public async scrapeMultiple(urls: string[]): Promise<Record<string, ScrapedPage>> {
     const results: Record<string, ScrapedPage> = {};
     const promises = urls.slice(0, 3).map(async (url) => {

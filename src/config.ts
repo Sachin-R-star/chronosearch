@@ -27,25 +27,35 @@ export interface AppConfig {
   };
 }
 
+function isValidKey(key?: string): boolean {
+  return Boolean(
+    key &&
+    key.trim().length > 0 &&
+    !key.includes('your_') &&
+    !key.includes('api_key_here') &&
+    !key.startsWith('placeholder')
+  );
+}
+
 export function loadConfig(): AppConfig {
   const env = process.env;
 
   // Auto-detect LLM provider based on available keys
   let llmProvider: AppConfig['llm']['provider'] = (env.LLM_PROVIDER as any) || 'auto';
   if (llmProvider === 'auto') {
-    if (env.OPENAI_API_KEY) llmProvider = 'openai';
-    else if (env.GEMINI_API_KEY) llmProvider = 'gemini';
-    else if (env.ANTHROPIC_API_KEY) llmProvider = 'anthropic';
-    else if (env.GROQ_API_KEY) llmProvider = 'groq';
+    if (isValidKey(env.OPENAI_API_KEY)) llmProvider = 'openai';
+    else if (isValidKey(env.GEMINI_API_KEY)) llmProvider = 'gemini';
+    else if (isValidKey(env.ANTHROPIC_API_KEY)) llmProvider = 'anthropic';
+    else if (isValidKey(env.GROQ_API_KEY)) llmProvider = 'groq';
     else llmProvider = 'mock'; // Graceful zero-key fallback
   }
 
   // Auto-detect Search provider based on available keys
   let searchProvider: AppConfig['search']['provider'] = (env.SEARCH_PROVIDER as any) || 'auto';
   if (searchProvider === 'auto') {
-    if (env.TAVILY_API_KEY) searchProvider = 'tavily';
-    else if (env.BRAVE_API_KEY) searchProvider = 'brave';
-    else if (env.SERPER_API_KEY) searchProvider = 'serper';
+    if (isValidKey(env.TAVILY_API_KEY)) searchProvider = 'tavily';
+    else if (isValidKey(env.BRAVE_API_KEY)) searchProvider = 'brave';
+    else if (isValidKey(env.SERPER_API_KEY)) searchProvider = 'serper';
     else searchProvider = 'duckduckgo'; // Zero-config fallback
   }
 
@@ -97,3 +107,4 @@ export function loadConfig(): AppConfig {
 }
 
 export const config = loadConfig();
+

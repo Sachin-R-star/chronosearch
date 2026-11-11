@@ -1,11 +1,20 @@
 export interface LLMMessage {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  name?: string;
+  tool_call_id?: string;
+}
+
+export interface LLMToolCall {
+  id: string;
+  name: string;
+  arguments: any;
 }
 
 export interface LLMOptions {
   temperature?: number;
   maxTokens?: number;
+  tools?: any[];
 }
 
 export type LLMChunkCallback = (chunk: string) => void;

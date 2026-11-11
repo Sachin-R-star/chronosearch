@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { AgentMessage, ConversationSession } from '../agent/types.js';
+import { AgentMessage, ConversationSession, EntitySnapshot } from '../agent/types.js';
 import { getSeedSessions } from './seeds.js';
 import { defaultTemporalEngine } from '../agent/temporal.js';
 
@@ -12,6 +12,8 @@ export interface MemoryStoreOptions {
 
 export class MemoryStore {
   private sessions: Map<string, ConversationSession> = new Map();
+  private dateIndex: Map<string, AgentMessage[]> = new Map(); // YYYY-MM-DD -> messages
+  private entityIndex: Map<string, { session: ConversationSession; snapshot: EntitySnapshot }[]> = new Map();
   private storageFile: string;
   private isLoaded: boolean = false;
 
@@ -46,13 +48,45 @@ export class MemoryStore {
       }
     } catch (err) {
       console.warn('MemoryStore initialization warning:', err);
-      // Fallback to in-memory seeds
       const seeds = getSeedSessions(referenceDate || defaultTemporalEngine.getNow());
       for (const session of seeds) {
         this.sessions.set(session.id, session);
       }
     }
+
+    this.rebuildIndexes();
     this.isLoaded = true;
+  }
+
+  private rebuildIndexes() {
+    this.dateIndex.clear();
+    this.entityIndex.clear();
+
+    for (const session of this.sessions.values()) {
+      // Index messages by calendar date (YYYY-MM-DD)
+      for (const msg of session.messages) {
+        const dateKey = msg.timestamp.split('T')[0];
+        if (!this.dateIndex.has(dateKey)) {
+          this.dateIndex.set(dateKey, []);
+        }
+        this.dateIndex.get(dateKey)!.push(msg);
+      }
+
+      // Index entity snapshots
+      if (session.entitySnapshots) {
+        for (const snapshot of session.entitySnapshots) {
+          const nameKey = snapshot.name.toLowerCase();
+          const catKey = snapshot.category.toLowerCase();
+
+          for (const key of [nameKey, catKey]) {
+            if (!this.entityIndex.has(key)) {
+              this.entityIndex.set(key, []);
+            }
+            this.entityIndex.get(key)!.push({ session, snapshot });
+          }
+        }
+      }
+    }
   }
 
   private saveSync() {
@@ -63,6 +97,7 @@ export class MemoryStore {
       }
       const data = Array.from(this.sessions.values());
       fs.writeFileSync(this.storageFile, JSON.stringify(data, null, 2), 'utf-8');
+      this.rebuildIndexes();
     } catch (err) {
       console.error('Failed to persist MemoryStore to disk:', err);
     }
@@ -114,7 +149,6 @@ export class MemoryStore {
     session.messages.push(fullMessage);
     session.updatedAt = fullMessage.timestamp;
 
-    // Auto-update title if it's the first user message and session has default title
     if (session.title === 'New Conversation' && message.role === 'user') {
       session.title = message.content.slice(0, 45) + (message.content.length > 45 ? '...' : '');
     }
@@ -124,73 +158,95 @@ export class MemoryStore {
   }
 
   /**
-   * Search messages specifically by a calendar date (YYYY-MM-DD).
+   * Fast O(1) date lookup in the temporal inverted index.
    */
   public findMessagesByDate(dateISO: string): AgentMessage[] {
-    const results: AgentMessage[] = [];
-    for (const session of this.sessions.values()) {
-      for (const msg of session.messages) {
-        if (msg.timestamp.startsWith(dateISO)) {
-          results.push(msg);
-        }
-      }
-    }
-    return results;
+    return this.dateIndex.get(dateISO) || [];
   }
 
   /**
-   * Find a session or messages matching a topic or temporal anchor.
-   * Resolves queries like "What did I ask you on 3 November?" or "Last Tuesday I asked about Postgres"
+   * Fast entity snapshot lookup.
+   */
+  public findEntitySnapshots(entityOrCategory: string): EntitySnapshot[] {
+    const key = entityOrCategory.toLowerCase();
+    const entries = this.entityIndex.get(key) || [];
+    return entries.map((e) => e.snapshot);
+  }
+
+  /**
+   * High-precision temporal and semantic session resolver.
    */
   public findSessionByTopicOrDate(
     query: string,
     anchorDateISO?: string
-  ): { session: ConversationSession; matchedMessages: AgentMessage[]; score: number } | null {
+  ): { session: ConversationSession; matchedMessages: AgentMessage[]; score: number; snapshots?: EntitySnapshot[] } | null {
     const lowerQuery = query.toLowerCase();
+
+    // 1. Direct temporal index match
+    if (anchorDateISO && this.dateIndex.has(anchorDateISO)) {
+      const messagesOnDate = this.dateIndex.get(anchorDateISO)!;
+      if (messagesOnDate.length > 0) {
+        const targetSessionId = messagesOnDate[0].sessionId;
+        const matchedSession = this.sessions.get(targetSessionId);
+        if (matchedSession) {
+          return {
+            session: matchedSession,
+            matchedMessages: matchedSession.messages,
+            score: 100,
+            snapshots: matchedSession.entitySnapshots,
+          };
+        }
+      }
+    }
+
+    // 2. Direct entity index match
+    const commonKeywords = ['crm', 'postgres', 'database', 'neon', 'supabase', 'hubspot', 'pipedrive', 'salesforce'];
+    for (const kw of commonKeywords) {
+      if (lowerQuery.includes(kw) && this.entityIndex.has(kw)) {
+        const entry = this.entityIndex.get(kw)![0];
+        if (entry) {
+          return {
+            session: entry.session,
+            matchedMessages: entry.session.messages,
+            score: 85,
+            snapshots: entry.session.entitySnapshots,
+          };
+        }
+      }
+    }
+
+    // 3. Fallback scoring across all sessions
     const queryTokens = lowerQuery
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
       .filter((w) => w.length > 2 && !['what', 'when', 'did', 'ask', 'you', 'the', 'and', 'for', 'are', 'about', 'has', 'any', 'pricing'].includes(w));
 
-    let bestMatch: { session: ConversationSession; matchedMessages: AgentMessage[]; score: number } | null = null;
+    let bestMatch: { session: ConversationSession; matchedMessages: AgentMessage[]; score: number; snapshots?: EntitySnapshot[] } | null = null;
 
     for (const session of this.sessions.values()) {
       let score = 0;
       const matchedMsgs: AgentMessage[] = [];
 
-      // Check temporal match
       const sessionDate = session.createdAt.split('T')[0];
-      const hasDateMatch = anchorDateISO && (sessionDate === anchorDateISO || session.messages.some((m) => m.timestamp.startsWith(anchorDateISO)));
-
-      if (hasDateMatch) {
-        score += 50; // Heavy temporal alignment bonus
+      if (anchorDateISO && (sessionDate === anchorDateISO || session.messages.some((m) => m.timestamp.startsWith(anchorDateISO)))) {
+        score += 50;
       }
 
-      // Check semantic / keyword match on session title & tags
       for (const tag of session.tags || []) {
-        if (lowerQuery.includes(tag.toLowerCase())) {
-          score += 15;
-        }
-      }
-      for (const token of queryTokens) {
-        if (session.title.toLowerCase().includes(token)) {
-          score += 10;
-        }
+        if (lowerQuery.includes(tag.toLowerCase())) score += 15;
       }
 
-      // Check message contents
+      for (const token of queryTokens) {
+        if (session.title.toLowerCase().includes(token)) score += 10;
+      }
+
       for (const msg of session.messages) {
         let msgScore = 0;
         const lowerContent = msg.content.toLowerCase();
-
-        if (anchorDateISO && msg.timestamp.startsWith(anchorDateISO)) {
-          msgScore += 20;
-        }
+        if (anchorDateISO && msg.timestamp.startsWith(anchorDateISO)) msgScore += 20;
 
         for (const token of queryTokens) {
-          if (lowerContent.includes(token)) {
-            msgScore += 8;
-          }
+          if (lowerContent.includes(token)) msgScore += 8;
         }
 
         if (msgScore > 0) {
@@ -200,16 +256,13 @@ export class MemoryStore {
       }
 
       if (score > 0 && (!bestMatch || score > bestMatch.score)) {
-        bestMatch = { session, matchedMessages: matchedMsgs, score };
+        bestMatch = { session, matchedMessages: matchedMsgs, score, snapshots: session.entitySnapshots };
       }
     }
 
     return bestMatch;
   }
 
-  /**
-   * Global keyword search across all conversation history.
-   */
   public searchAcrossAllSessions(query: string, limit: number = 5): AgentMessage[] {
     const lower = query.toLowerCase();
     const results: { msg: AgentMessage; score: number }[] = [];

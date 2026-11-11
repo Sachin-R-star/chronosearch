@@ -129,13 +129,31 @@ export class SearchPlanner {
           });
         }
       } else {
-        // Standard fresh search query
-        const cleanQuery = query.replace(/[^\w\s-]/g, ' ').trim();
+        // Multi-query decomposition for general & open-ended search
+        const isRecent = /\b(latest|recent|new|today|yesterday|this week|announced|update|news)\b/i.test(lower);
+        const recency = isRecent ? 'week' : 'month';
+        const cleanQuery = query.replace(/[?!]/g, '').trim();
+
         searchQueries.push({
           query: cleanQuery,
           purpose: 'general',
-          recency: 'month',
+          recency,
         });
+
+        // If query is comparative ("vs", "compare", "or", "difference"), add orthogonal benchmark query
+        if (lower.includes(' vs ') || lower.includes('compare ') || lower.includes('difference between')) {
+          searchQueries.push({
+            query: `${cleanQuery} benchmark comparison 2026`,
+            purpose: 'general',
+            recency,
+          });
+        } else if (lower.includes('pricing') || lower.includes('cost') || lower.includes('tier')) {
+          searchQueries.push({
+            query: `${cleanQuery} official pricing plans`,
+            purpose: 'pricing',
+            recency,
+          });
+        }
       }
     }
 
@@ -178,3 +196,4 @@ export class SearchPlanner {
 }
 
 export const defaultPlanner = new SearchPlanner();
+

@@ -2,8 +2,8 @@ import { ConversationSession } from '../agent/types.js';
 
 export function getSeedSessions(referenceDate: Date = new Date()): ConversationSession[] {
   // Anchored around Nov 3 (Last Tuesday) and Monday (Nov 9 or recent Monday)
-  const nov3 = new Date(referenceDate.getFullYear(), 10, 3, 14, 32, 0); // Nov 3, 2026 14:32:00
-  const nov9 = new Date(referenceDate.getFullYear(), 10, 9, 10, 15, 0); // Nov 9, 2026 (Monday) 10:15:00
+  const nov3 = new Date(referenceDate.getFullYear(), 10, 3, 14, 32, 0); // Tuesday, Nov 3, 2026 14:32:00
+  const nov9 = new Date(referenceDate.getFullYear(), 10, 9, 10, 15, 0); // Monday, Nov 9, 2026 10:15:00
 
   return [
     {
@@ -11,7 +11,70 @@ export function getSeedSessions(referenceDate: Date = new Date()): ConversationS
       title: 'Postgres Hosting Comparison & Recommendations',
       createdAt: nov3.toISOString(),
       updatedAt: new Date(nov3.getTime() + 15 * 60 * 1000).toISOString(),
-      tags: ['postgres', 'hosting', 'infrastructure', 'database'],
+      tags: ['postgres', 'hosting', 'database', 'neon', 'supabase', 'railway', 'tembo', 'aurora'],
+      entitySnapshots: [
+        {
+          name: 'Neon',
+          category: 'database',
+          baselineDate: '2026-11-03',
+          attributes: {
+            pricingTiers: {
+              free: '$0/mo (0.5 GB storage, 1 project)',
+              launch: '$19/mo (10 GB storage, compute pooled at $0.16/CU-hour)',
+              scale: '$69/mo (50 GB storage, autoscaling up to 8 CU)',
+            },
+            keyFeatures: ['Instant branching (copy-on-write)', 'Scale-to-zero compute', 'Decoupled storage'],
+          },
+        },
+        {
+          name: 'Supabase',
+          category: 'database',
+          baselineDate: '2026-11-03',
+          attributes: {
+            pricingTiers: {
+              free: '$0/mo (500 MB database, pauses after 1 wk inactivity)',
+              pro: '$25/mo per project (8 GB disk, 250 GB egress, daily backups)',
+              team: '$599/mo (SOC2, Priority Support)',
+            },
+            keyFeatures: ['Postgres 15/16', 'Built-in Auth', 'Realtime engine', 'pgvector'],
+          },
+        },
+        {
+          name: 'Railway',
+          category: 'infra',
+          baselineDate: '2026-11-03',
+          attributes: {
+            pricingTiers: {
+              hobby: '$5/mo platform usage credit included',
+              usage: 'Compute: $0.000231/vCPU/min (~$10/vCPU/mo), RAM: $0.000046/GB/min (~$2/GB/mo)',
+            },
+            keyFeatures: ['PaaS developer workflow', 'Automated SSL and volumes', 'Private networking'],
+          },
+        },
+        {
+          name: 'Tembo',
+          category: 'database',
+          baselineDate: '2026-11-03',
+          attributes: {
+            pricingTiers: {
+              hobby: '$15/mo for basic development',
+              pro: '$45/mo with automated backups and high availability',
+            },
+            keyFeatures: ['200+ curated extensions', 'pg_vector', 'Timescale', 'Columnar'],
+          },
+        },
+        {
+          name: 'AWS Aurora Serverless v2',
+          category: 'database',
+          baselineDate: '2026-11-03',
+          attributes: {
+            pricingTiers: {
+              acu: '~$0.12 per ACU-hour (minimum 0.5 ACU = ~$43/mo base per instance)',
+            },
+            keyFeatures: ['Multi-AZ autoscaling', 'Enterprise AWS IAM & VPC governance'],
+          },
+        },
+      ],
       messages: [
         {
           id: 'msg-pg-1',
@@ -77,7 +140,89 @@ export function getSeedSessions(referenceDate: Date = new Date()): ConversationS
       title: 'Shortlisting 5 CRM Tools for a 20-Person Sales Team',
       createdAt: nov9.toISOString(),
       updatedAt: new Date(nov9.getTime() + 20 * 60 * 1000).toISOString(),
-      tags: ['crm', 'sales', 'evaluation', 'pricing'],
+      tags: ['crm', 'sales', 'evaluation', 'pricing', 'hubspot', 'pipedrive', 'salesforce', 'zoho', 'close'],
+      entitySnapshots: [
+        {
+          name: 'HubSpot Sales Hub',
+          category: 'crm',
+          baselineDate: '2026-11-09',
+          attributes: {
+            pricingTiers: {
+              starter: '$20/seat/month billed annually',
+              pro: '$500/month base (includes 5 seats) + $100/extra seat/month',
+            },
+            teamSizeCalculations: {
+              team20Starter: '$400/month ($4,800/year)',
+              team20Pro: '$2,000/month ($24,000/year) + one-time $1,500 onboarding',
+            },
+            keyFeatures: ['Built-in marketing alignment', 'Email templates & sequences', 'Meeting scheduler', 'Breeze AI copilot'],
+          },
+        },
+        {
+          name: 'Pipedrive',
+          category: 'crm',
+          baselineDate: '2026-11-09',
+          attributes: {
+            pricingTiers: {
+              advanced: '$27.90/user/month billed annually',
+              professional: '$49.90/user/month billed annually',
+            },
+            teamSizeCalculations: {
+              team20Advanced: '$558/month ($6,696/year)',
+              team20Pro: '$998/month ($11,976/year)',
+            },
+            keyFeatures: ['Visual pipeline management', 'Two-way email sync', 'Email automations', 'Revenue forecasting'],
+          },
+        },
+        {
+          name: 'Salesforce Starter Suite',
+          category: 'crm',
+          baselineDate: '2026-11-09',
+          attributes: {
+            pricingTiers: {
+              starter: '$25/user/month billed annually',
+              pro: '$100/user/month billed annually',
+            },
+            teamSizeCalculations: {
+              team20Starter: '$500/month ($6,000/year)',
+              team20Pro: '$2,000/month ($24,000/year)',
+            },
+            keyFeatures: ['Simplified SMB interface', 'Unified CRM + email', 'Agentforce AI previews'],
+          },
+        },
+        {
+          name: 'Zoho CRM',
+          category: 'crm',
+          baselineDate: '2026-11-09',
+          attributes: {
+            pricingTiers: {
+              professional: '$23/user/month billed annually',
+              enterprise: '$40/user/month billed annually',
+            },
+            teamSizeCalculations: {
+              team20Professional: '$460/month ($5,520/year)',
+              team20Enterprise: '$800/month ($9,600/year)',
+            },
+            keyFeatures: ['SalesSignals', 'Blueprint process management', 'Zia AI assistant', 'Telephony integration'],
+          },
+        },
+        {
+          name: 'Close CRM',
+          category: 'crm',
+          baselineDate: '2026-11-09',
+          attributes: {
+            pricingTiers: {
+              startup: '$49/user/month billed annually',
+              professional: '$99/user/month billed annually',
+            },
+            teamSizeCalculations: {
+              team20Startup: '$980/month ($11,760/year)',
+              team20Professional: '$1,980/month ($23,760/year)',
+            },
+            keyFeatures: ['Built-in VoIP calling & SMS', 'Predictive power dialer', 'Multi-channel outbound sequences'],
+          },
+        },
+      ],
       messages: [
         {
           id: 'msg-crm-1',

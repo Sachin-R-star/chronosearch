@@ -16,3 +16,4 @@ export interface SearchProvider {
   isAvailable(): boolean;
   search(query: string, options?: WebSearchOptions): Promise<SearchToolResult>;
 }
+

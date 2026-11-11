@@ -49,3 +49,4 @@ test('Agent handles Last Tuesday Postgres Delta prompt', async () => {
   assert.strictEqual(response.metadata.temporalAnchor.anchorDate, '2026-11-03');
   assert.ok(response.content.toLowerCase().includes('postgres') || response.content.toLowerCase().includes('neon'));
 });
+

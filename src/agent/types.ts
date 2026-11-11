@@ -1,4 +1,4 @@
-export type MessageRole = 'user' | 'assistant' | 'system';
+export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
 export interface Citation {
   index: number;
@@ -9,12 +9,34 @@ export interface Citation {
   publishedDate?: string;
 }
 
+export interface EntitySnapshot {
+  name: string;
+  category: 'crm' | 'database' | 'infra' | 'saas' | 'general';
+  baselineDate: string;
+  attributes: {
+    pricingTiers?: Record<string, string | number>;
+    teamSizeCalculations?: Record<string, string | number>;
+    keyFeatures?: string[];
+    recentReleases?: string[];
+    [key: string]: any;
+  };
+}
+
 export interface MessageMetadata {
   citations?: Citation[];
   searchQueries?: string[];
   recalledSessionId?: string;
   temporalAnchor?: TemporalAnchor;
   deltaSummary?: DeltaSummary;
+  entitySnapshots?: EntitySnapshot[];
+  latencyBreakdown?: {
+    temporalMs: number;
+    memoryMs: number;
+    searchMs: number;
+    scrapeMs: number;
+    llmFirstTokenMs: number;
+    totalMs: number;
+  };
   latencyMs?: number;
 }
 
@@ -34,6 +56,7 @@ export interface ConversationSession {
   updatedAt: string; // ISO 8601
   messages: AgentMessage[];
   tags?: string[];
+  entitySnapshots?: EntitySnapshot[];
 }
 
 export interface TemporalAnchor {
@@ -58,6 +81,8 @@ export interface SearchResultItem {
   snippet: string;
   publishedDate?: string;
   source: string;
+  extractedTables?: string[];
+  pageContent?: string;
 }
 
 export interface SearchToolResult {
@@ -69,10 +94,10 @@ export interface SearchToolResult {
 
 export interface DeltaFact {
   entity: string;
-  dimension: 'pricing' | 'product_release' | 'feature' | 'staleness';
+  dimension: 'pricing' | 'product_release' | 'feature' | 'team_pricing' | 'staleness';
   baselineValue: string;
   currentValue: string;
-  status: 'changed' | 'unchanged' | 'uncertain';
+  status: 'changed' | 'unchanged' | 'new_release' | 'uncertain';
   summary: string;
   sources: string[];
 }
@@ -83,6 +108,11 @@ export interface DeltaSummary {
   baselineDate: string;
   currentDate: string;
   facts: DeltaFact[];
+  teamCalculations?: {
+    teamSize: number;
+    baselineTotal: string;
+    currentTotal: string;
+  };
 }
 
 export type AgentEventType =
@@ -92,6 +122,7 @@ export type AgentEventType =
   | 'search_planned'
   | 'search_executing'
   | 'search_completed'
+  | 'page_scraped'
   | 'delta_computed'
   | 'token'
   | 'done'
@@ -104,3 +135,30 @@ export interface AgentEvent {
 }
 
 export type AgentEventCallback = (event: AgentEvent) => void;
+
+// The ONE TOOL definition schema (OpenAI / Anthropic / Gemini compatible)
+export const WEB_SEARCH_TOOL_DEFINITION = {
+  name: 'web_search',
+  description:
+    'Search the live web for real-time information, pricing pages, product changelogs, release notes, and documentation.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        description: 'The search query to look up on the web.',
+      },
+      recency: {
+        type: 'string',
+        enum: ['day', 'week', 'month', 'year', 'any'],
+        description: 'Optional freshness filter for recent updates.',
+      },
+      domains: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional list of domains to restrict search results to.',
+      },
+    },
+    required: ['query'],
+  },
+};

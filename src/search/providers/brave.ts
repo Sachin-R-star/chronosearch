@@ -10,7 +10,12 @@ export class BraveSearchProvider implements SearchProvider {
   }
 
   public isAvailable(): boolean {
-    return Boolean(this.apiKey && this.apiKey.trim().length > 0);
+    return Boolean(
+      this.apiKey &&
+      this.apiKey.trim().length > 0 &&
+      !this.apiKey.includes('your_') &&
+      !this.apiKey.includes('api_key_here')
+    );
   }
 
   public async search(query: string, options: WebSearchOptions = {}): Promise<SearchToolResult> {

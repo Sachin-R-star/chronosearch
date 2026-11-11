@@ -142,3 +142,4 @@ Read [`DESIGN.md`](./DESIGN.md) for the in-depth architectural breakdown:
 - Why it is designed for sub-1.5s latency and high precision
 - What was considered and rejected (sequential ReAct, pure vector memory, monolithic search)
 - What we would build with an additional week (DOM diffing, background watcher daemons)
+

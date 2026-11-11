@@ -51,6 +51,11 @@ export class ChronoAgent {
     onEvent?: AgentEventCallback
   ): Promise<AgentMessage> {
     const startTime = Date.now();
+    let temporalTime = 0;
+    let memoryTime = 0;
+    let searchTime = 0;
+    let scrapeTime = 0;
+
     const emit = (type: any, data: any) => {
       if (onEvent) {
         onEvent({ type, data, timestamp: Date.now() });
@@ -69,8 +74,10 @@ export class ChronoAgent {
     }
 
     // 1. Temporal Anchoring
+    const t0 = Date.now();
     const temporalAnchor = this.temporal.parseTemporalExpression(userQuery);
     const temporalFrame = this.temporal.getTemporalFrame();
+    temporalTime = Date.now() - t0;
 
     emit('temporal_resolved', {
       anchor: temporalAnchor,
@@ -79,21 +86,19 @@ export class ChronoAgent {
     });
 
     // 2. Episodic Memory Recall
+    const m0 = Date.now();
     let recalledContext = '';
     let recalledSession: ConversationSession | null = null;
     let matchedMessages: AgentMessage[] = [];
 
-    // Check if temporal anchor or query implies memory recall
     const plan = this.planner.plan(userQuery, temporalAnchor);
 
     if (plan.requiresMemoryRecall) {
-      // First try matching in current session if it has history
       if (activeSession.messages.length > 0) {
         matchedMessages = activeSession.messages;
         recalledSession = activeSession;
       }
 
-      // If not found in current session, search across all sessions by topic and date
       if (matchedMessages.length === 0) {
         const found = this.memory.findSessionByTopicOrDate(
           userQuery,
@@ -101,11 +106,10 @@ export class ChronoAgent {
         );
         if (found) {
           recalledSession = found.session;
-          matchedMessages = found.matchedMessages.length > 0 ? found.session.messages : found.session.messages;
+          matchedMessages = found.session.messages;
         }
       }
 
-      // If still nothing, do a global keyword search across stored messages
       if (matchedMessages.length === 0) {
         matchedMessages = this.memory.searchAcrossAllSessions(userQuery, 3);
       }
@@ -123,8 +127,9 @@ export class ChronoAgent {
         });
       }
     }
+    memoryTime = Date.now() - m0;
 
-    // Re-plan with recalled context to produce highly targeted delta search queries
+    // Re-plan with recalled context
     const refinedPlan = this.planner.plan(userQuery, temporalAnchor, recalledContext);
 
     // 3. Web Search Execution (Parallel)
@@ -142,7 +147,7 @@ export class ChronoAgent {
         searchQueriesIssued.push(q.query);
       }
 
-      // Dispatch search queries concurrently
+      const s0 = Date.now();
       const toolInputs = refinedPlan.searchQueries.map((q) => ({
         query: q.query,
         options: {
@@ -155,22 +160,34 @@ export class ChronoAgent {
       const toolResults = await this.searchTool.executeParallel(toolInputs);
       const deduplicated = this.searchTool.deduplicateResults(toolResults);
       allSearchResults.push(...deduplicated);
+      searchTime = Date.now() - s0;
 
       emit('search_completed', {
         resultCount: allSearchResults.length,
         sources: allSearchResults.map((r) => ({ title: r.title, url: r.url, source: r.source })),
-        totalLatencyMs: toolResults.reduce((acc, curr) => Math.max(acc, curr.latencyMs), 0),
+        totalLatencyMs: searchTime,
       });
 
       // Deep scrape top 2 relevant URLs in parallel with strict timeout
       if (allSearchResults.length > 0) {
+        const sc0 = Date.now();
         const topUrls = allSearchResults.slice(0, 2).map((r) => r.url);
         const scraped = await this.scraper.scrapeMultiple(topUrls);
+        scrapeTime = Date.now() - sc0;
+
         for (const r of allSearchResults) {
           if (scraped[r.url] && scraped[r.url].success) {
-            r.snippet = `${r.snippet} [Page Details: ${scraped[r.url].text.slice(0, 600)}]`;
+            r.pageContent = scraped[r.url].text.slice(0, 800);
+            if (scraped[r.url].tables.length > 0) {
+              r.extractedTables = scraped[r.url].tables;
+            }
           }
         }
+
+        emit('page_scraped', {
+          scrapedCount: Object.keys(scraped).length,
+          latencyMs: scrapeTime,
+        });
       }
     }
 
@@ -188,7 +205,7 @@ export class ChronoAgent {
       emit('delta_computed', deltaSummary);
     }
 
-    // 5. Build Citation Map
+    // 5. Build Citation Footnote Index
     const citations: Citation[] = allSearchResults.slice(0, 6).map((item, idx) => ({
       index: idx + 1,
       title: item.title,
@@ -201,7 +218,7 @@ export class ChronoAgent {
     // 6. Synthesize via Streaming LLM
     const systemPrompt = this.buildSystemPrompt(temporalFrame, temporalAnchor, recalledContext, citations, deltaSummary);
 
-    const userMessage = this.memory.addMessage(activeSession.id, {
+    this.memory.addMessage(activeSession.id, {
       role: 'user',
       content: userQuery,
       timestamp: new Date().toISOString(),
@@ -231,7 +248,7 @@ export class ChronoAgent {
 
     const totalLatency = Date.now() - startTime;
 
-    // 7. Save Assistant Message
+    // 7. Save Assistant Message with full telemetry
     const assistantMessage = this.memory.addMessage(activeSession.id, {
       role: 'assistant',
       content: assistantFullText,
@@ -241,6 +258,15 @@ export class ChronoAgent {
         searchQueries: searchQueriesIssued,
         temporalAnchor: temporalAnchor || undefined,
         deltaSummary,
+        entitySnapshots: recalledSession?.entitySnapshots,
+        latencyBreakdown: {
+          temporalMs: temporalTime,
+          memoryMs: memoryTime,
+          searchMs: searchTime,
+          scrapeMs: scrapeTime,
+          llmFirstTokenMs: Math.max(0, totalLatency - (temporalTime + memoryTime + searchTime + scrapeTime)),
+          totalMs: totalLatency,
+        },
         latencyMs: totalLatency,
       },
     });
@@ -335,14 +361,14 @@ Summary: ${deltaSummary.verdict}
 COMMUNICATION STYLE & RESPONSE STRUCTURE
 ==================================================
 1. ANSWERS FAST & GETS THINGS RIGHT:
-   - Start with an immediate, high-signal Executive Summary (1-2 sentences) answering the core question directly (e.g. "Yes, my recommendations from 3 November remain accurate today with no pricing changes," or "Here is what changed since Monday: ...").
-   - Follow with a structured, digestible comparison (e.g. bullet points or breakdown per tool/provider).
+   - Start with an immediate, high-signal Executive Summary (1-2 sentences) answering the core question directly (e.g. "No, none of the 5 shortlisted CRM tools have changed pricing since Monday...").
+   - Follow with a structured, digestible comparison table or breakdown per tool/provider.
+   - For team size queries (e.g. 20-person sales team), provide the total math breakdown for the team.
    - Explicitly contrast the Baseline State (from the past conversation) vs Current State (from live search).
-   - Use Markdown bolding, tables, or clean bullet points.
+   - Address both pricing changes AND shipped features.
 2. GOOD TO TALK TO:
    - Warm, authoritative, executive tone.
-   - Never sound defensive or robotic.
-   - If no conversation history exists for a referenced past date, politely acknowledge that the specific thread isn't in current session memory and offer to check the latest data for their candidates immediately.`;
+   - Ground every claim with citations [^1], [^2].`;
 
     return prompt;
   }
