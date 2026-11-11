@@ -134,6 +134,51 @@ body {
   font-family: var(--font-mono);
 }
 
+.benchmark-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-benchmark {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.2));
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.btn-benchmark:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(99, 102, 241, 0.35));
+  border-color: #60a5fa;
+}
+
+.benchmark-stats-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+.benchmark-pill-pass {
+  color: #34d399;
+  font-weight: 600;
+}
+
 .anchor-value {
   font-size: 11px;
   color: var(--text-dim);

@@ -91,6 +91,77 @@ function setupEventListeners() {
     });
   }
 
+  // Benchmark evaluation suite runner
+  const runEvalBtn = document.getElementById('run-eval-btn');
+  const benchmarkBtnText = document.getElementById('benchmark-btn-text');
+  const benchmarkBtnIcon = document.getElementById('benchmark-btn-icon');
+  const benchmarkPassBadge = document.getElementById('benchmark-pass-badge');
+
+  if (runEvalBtn) {
+    runEvalBtn.addEventListener('click', async () => {
+      if (runEvalBtn.disabled) return;
+      runEvalBtn.disabled = true;
+      benchmarkBtnIcon.textContent = '⏳';
+      benchmarkBtnText.textContent = 'Running Suite...';
+      showActivityBar('⚡ Running architecture benchmark suite (3 test cases)...');
+
+      try {
+        const res = await fetch('/api/eval/run', { method: 'POST' });
+        const result = await res.json();
+
+        benchmarkPassBadge.textContent = `${result.passRate}% (${result.passedCases}/${result.totalCases} Passed)`;
+        benchmarkPassBadge.style.color = result.passRate === 100 ? '#34d399' : '#f87171';
+
+        // Add a benchmark report card directly into the chat area
+        const emptyState = document.getElementById('empty-state');
+        if (emptyState) emptyState.remove();
+
+        const benchEl = document.createElement('div');
+        benchEl.className = 'message assistant';
+        benchEl.innerHTML = `
+          <div class="message-bubble">
+            <div class="message-content">
+              <h3>⚡ Architecture Evaluation Benchmark Results</h3>
+              <p><strong>Pass Rate:</strong> ${result.passRate}% (${result.passedCases}/${result.totalCases} Passed) | <strong>Avg Latency:</strong> ${result.averageLatencyMs}ms | <strong>Avg TTFT:</strong> ${result.averageTTFTMs}ms | <strong>Avg Grounding:</strong> ${result.averageGroundingScore}%</p>
+              <br>
+              <table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:8px;">
+                <thead>
+                  <tr style="border-bottom:1px solid #334155; text-align:left; color:#94a3b8;">
+                    <th style="padding:6px;">Test Benchmark</th>
+                    <th style="padding:6px;">Result</th>
+                    <th style="padding:6px;">Latency</th>
+                    <th style="padding:6px;">TTFT</th>
+                    <th style="padding:6px;">Grounding</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${result.cases.map(c => `
+                    <tr style="border-bottom:1px solid #1e293b;">
+                      <td style="padding:6px; font-weight:600;">${escapeHtml(c.name)}</td>
+                      <td style="padding:6px; color:${c.passed ? '#34d399' : '#f87171'}; font-weight:bold;">${c.passed ? '✔ PASS' : '✖ FAIL'}</td>
+                      <td style="padding:6px;">${c.totalLatencyMs}ms</td>
+                      <td style="padding:6px;">${c.timeToFirstTokenMs}ms</td>
+                      <td style="padding:6px;">${c.groundingScore}%</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+        chatMessagesEl.appendChild(benchEl);
+        scrollToBottom();
+      } catch (err) {
+        console.error('Benchmark error:', err);
+      } finally {
+        runEvalBtn.disabled = false;
+        benchmarkBtnIcon.textContent = '▶';
+        benchmarkBtnText.textContent = 'Run Benchmark Suite';
+        hideActivityBar();
+      }
+    });
+  }
+
   // Prompt chips
   document.querySelectorAll('.prompt-chip').forEach((chip) => {
     chip.addEventListener('click', () => {
@@ -341,7 +412,7 @@ function buildCitationsGrid(citations) {
             <span class="citation-index">${c.index}</span>
             <div class="citation-info">
               <div class="citation-name">${escapeHtml(c.title || c.domain)}</div>
-              <div class="citation-domain">${escapeHtml(c.domain)}</div>
+              <div class="citation-domain">${escapeHtml(c.domain)}${c.groundingConfidence ? ` • ${(c.groundingConfidence * 100).toFixed(0)}% Grounded` : ''}</div>
             </div>
           </a>
         `

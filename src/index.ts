@@ -8,6 +8,7 @@ import { defaultMemoryStore } from './memory/store.js';
 import { defaultTemporalEngine } from './agent/temporal.js';
 import { defaultSearchTool } from './search/tool.js';
 import { defaultLLMProvider } from './llm/factory.js';
+import { ArchitectureBenchmarkRunner } from './eval/benchmark.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,6 +98,24 @@ app.post('/api/chat', async (req: Request, res: Response) => {
     res.write(`data: ${JSON.stringify({ type: 'error', data: { message: err.message } })}\n\n`);
   } finally {
     res.end();
+  }
+});
+
+// GET /api/eval/cases (List benchmark dataset test cases)
+app.get('/api/eval/cases', (_req: Request, res: Response) => {
+  const runner = new ArchitectureBenchmarkRunner(defaultAgent);
+  res.json({ cases: runner.getTestCases() });
+});
+
+// POST /api/eval/run (Execute automated architectural benchmark suite)
+app.post('/api/eval/run', async (_req: Request, res: Response) => {
+  try {
+    const runner = new ArchitectureBenchmarkRunner(defaultAgent);
+    const result = await runner.runSuite();
+    res.json(result);
+  } catch (err: any) {
+    console.error('Benchmark execution failed:', err);
+    res.status(500).json({ error: err.message || 'Benchmark execution failed' });
   }
 });
 

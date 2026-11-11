@@ -17,6 +17,8 @@ import { PageScraper, defaultScraper } from '../search/scraper.js';
 import { TemporalEntityGraph, defaultEntityGraph } from './entity-graph.js';
 import { EpistemicCoverageAnalyzer, defaultCoverageAnalyzer } from './coverage.js';
 import { CitationGroundingVerifier, defaultGroundingVerifier } from './grounding.js';
+import { SourceReliabilityRanker, defaultRanker } from '../search/ranker.js';
+import { BitemporalOperator, defaultBitemporalOperator } from './bitemporal.js';
 import { LLMProvider } from '../llm/types.js';
 import { defaultLLMProvider } from '../llm/factory.js';
 
@@ -31,6 +33,8 @@ export interface AgentOptions {
   groundingVerifier?: CitationGroundingVerifier;
   scraper?: PageScraper;
   llm?: LLMProvider;
+  ranker?: SourceReliabilityRanker;
+  bitemporalOperator?: BitemporalOperator;
 }
 
 export class ChronoAgent {
@@ -44,6 +48,8 @@ export class ChronoAgent {
   private groundingVerifier: CitationGroundingVerifier;
   private scraper: PageScraper;
   private llm: LLMProvider;
+  private ranker: SourceReliabilityRanker;
+  private bitemporalOperator: BitemporalOperator;
 
   constructor(options: AgentOptions = {}) {
     this.temporal = options.temporal || defaultTemporalEngine;
@@ -56,6 +62,8 @@ export class ChronoAgent {
     this.groundingVerifier = options.groundingVerifier || defaultGroundingVerifier;
     this.scraper = options.scraper || defaultScraper;
     this.llm = options.llm || defaultLLMProvider;
+    this.ranker = options.ranker || defaultRanker;
+    this.bitemporalOperator = options.bitemporalOperator || defaultBitemporalOperator;
   }
 
   public async chat(
@@ -190,12 +198,24 @@ export class ChronoAgent {
       }));
 
       const toolResults = await this.searchTool.executeParallel(toolInputs);
-      allSearchResults = this.searchTool.deduplicateResults(toolResults);
+      const deduplicated = this.searchTool.deduplicateResults(toolResults);
+      const rankedResults = this.ranker.rankResults(deduplicated, temporalFrame.todayISO);
+      allSearchResults = rankedResults.map((r) => ({
+        ...r,
+        domainTier: r.domainTier,
+        reliabilityScore: r.compositeReliabilityScore,
+      }));
       searchDuration = Date.now() - s0;
 
       emit('search_completed', {
         resultCount: allSearchResults.length,
-        sources: allSearchResults.map((r) => ({ title: r.title, url: r.url, source: r.source })),
+        sources: allSearchResults.map((r) => ({
+          title: r.title,
+          url: r.url,
+          source: r.source,
+          domainTier: r.domainTier,
+          reliabilityScore: r.reliabilityScore,
+        })),
         totalLatencyMs: searchDuration,
       });
 
@@ -203,7 +223,7 @@ export class ChronoAgent {
         step: 'Speculative Search Fan-Out',
         durationMs: searchDuration,
         status: 'completed',
-        details: `${refinedPlan.searchQueries.length} parallel queries -> ${allSearchResults.length} sources`,
+        details: `${refinedPlan.searchQueries.length} parallel queries -> ${allSearchResults.length} sources (Ranked by Authority & Temporal Decay)`,
       });
 
       // ------------------------------------------------------------------------
@@ -303,7 +323,7 @@ export class ChronoAgent {
     // --------------------------------------------------------------------------
     // Phase 7: Footnote Indexing & Streaming LLM Synthesis
     // --------------------------------------------------------------------------
-    const citations: Citation[] = allSearchResults.slice(0, 6).map((item, idx) => ({
+    let citations: Citation[] = allSearchResults.slice(0, 6).map((item, idx) => ({
       index: idx + 1,
       title: item.title,
       url: item.url,
@@ -311,6 +331,15 @@ export class ChronoAgent {
       snippet: item.snippet,
       publishedDate: item.publishedDate,
     }));
+
+    if (citations.length === 0 && matchedMessages.length > 0) {
+      for (const m of matchedMessages) {
+        if (m.metadata?.citations && m.metadata.citations.length > 0) {
+          citations = m.metadata.citations.slice(0, 6);
+          break;
+        }
+      }
+    }
 
     const systemPrompt = this.buildSystemPrompt(
       temporalFrame,

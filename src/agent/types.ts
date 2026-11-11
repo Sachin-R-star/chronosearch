@@ -98,6 +98,8 @@ export interface SearchResultItem {
   source: string;
   extractedTables?: string[];
   pageContent?: string;
+  domainTier?: 'OFFICIAL_VENDOR' | 'TECH_DOCS_MEDIA' | 'AGGREGATOR' | 'GENERIC_WEB';
+  reliabilityScore?: number;
 }
 
 export interface SearchToolResult {

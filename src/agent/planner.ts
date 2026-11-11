@@ -93,17 +93,17 @@ export class SearchPlanner {
           });
         } else if (combinedText.includes('postgres') || combinedText.includes('hosting')) {
           searchQueries.push({
-            query: 'Neon Supabase Postgres pricing changes updates 2026',
+            query: 'Neon Supabase Postgres pricing 2026',
             purpose: 'pricing',
             recency: 'month',
           });
           searchQueries.push({
-            query: 'Railway Tembo Postgres pricing changes 2026',
+            query: 'Railway Tembo Postgres pricing 2026',
             purpose: 'pricing',
             recency: 'month',
           });
           searchQueries.push({
-            query: 'Neon Supabase changelog major releases November 2026',
+            query: 'Neon Supabase changelog updates 2026',
             purpose: 'changelog',
             recency: 'month',
           });
