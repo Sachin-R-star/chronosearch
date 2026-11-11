@@ -54,3 +54,4 @@ export class CitationSanitizer {
 }
 
 export const defaultCitationSanitizer = new CitationSanitizer();
+

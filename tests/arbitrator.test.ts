@@ -45,3 +45,4 @@ test('EvidenceArbitrator resolves conflicting claims favoring high authority ven
   assert.equal(hubspotResult.competingClaimsCount, 3);
   assert.ok(hubspotResult.arbitrationRationale.includes('Official vendor source hubspot.com ($20/user) prioritized'));
 });
+

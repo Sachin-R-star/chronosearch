@@ -20,3 +20,4 @@ test('CitationSanitizer repairs hallucinated out-of-bounds citations', () => {
   assert.ok(result.sanitizedText.includes('[^2]'));
   assert.ok(!result.sanitizedText.includes('[^99]'));
 });
+

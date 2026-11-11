@@ -35,3 +35,4 @@ test('LiveEntityAccumulator accumulates entities and constraints across conversa
   assert.ok(allEntities.includes('HubSpot Sales Hub'));
   assert.ok(allEntities.includes('Salesforce Starter Suite'));
 });
+

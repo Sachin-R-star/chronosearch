@@ -90,3 +90,4 @@ export class LiveEntityAccumulator {
 }
 
 export const defaultEntityAccumulator = new LiveEntityAccumulator();
+
