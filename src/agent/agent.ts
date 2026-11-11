@@ -19,6 +19,9 @@ import { EpistemicCoverageAnalyzer, defaultCoverageAnalyzer } from './coverage.j
 import { CitationGroundingVerifier, defaultGroundingVerifier } from './grounding.js';
 import { SourceReliabilityRanker, defaultRanker } from '../search/ranker.js';
 import { BitemporalOperator, defaultBitemporalOperator } from './bitemporal.js';
+import { EvidenceArbitrator, defaultArbitrator } from './arbitrator.js';
+import { LiveEntityAccumulator, defaultEntityAccumulator } from '../memory/entity-accumulator.js';
+import { CitationSanitizer, defaultCitationSanitizer } from './sanitizer.js';
 import { LLMProvider } from '../llm/types.js';
 import { defaultLLMProvider } from '../llm/factory.js';
 
@@ -35,6 +38,9 @@ export interface AgentOptions {
   llm?: LLMProvider;
   ranker?: SourceReliabilityRanker;
   bitemporalOperator?: BitemporalOperator;
+  arbitrator?: EvidenceArbitrator;
+  entityAccumulator?: LiveEntityAccumulator;
+  sanitizer?: CitationSanitizer;
 }
 
 export class ChronoAgent {
@@ -50,6 +56,9 @@ export class ChronoAgent {
   private llm: LLMProvider;
   private ranker: SourceReliabilityRanker;
   private bitemporalOperator: BitemporalOperator;
+  private arbitrator: EvidenceArbitrator;
+  private entityAccumulator: LiveEntityAccumulator;
+  private sanitizer: CitationSanitizer;
 
   constructor(options: AgentOptions = {}) {
     this.temporal = options.temporal || defaultTemporalEngine;
@@ -64,6 +73,9 @@ export class ChronoAgent {
     this.llm = options.llm || defaultLLMProvider;
     this.ranker = options.ranker || defaultRanker;
     this.bitemporalOperator = options.bitemporalOperator || defaultBitemporalOperator;
+    this.arbitrator = options.arbitrator || defaultArbitrator;
+    this.entityAccumulator = options.entityAccumulator || defaultEntityAccumulator;
+    this.sanitizer = options.sanitizer || defaultCitationSanitizer;
   }
 
   public async chat(
@@ -89,6 +101,16 @@ export class ChronoAgent {
     }
     if (!activeSession) {
       activeSession = this.memory.createSession('New Conversation', sessionId);
+    }
+
+    // Accumulate entities and multi-turn constraints into session graph
+    const accumulation = this.entityAccumulator.updateSessionGraph(activeSession, userQuery);
+    if (accumulation.newEntitiesDiscovered.length > 0) {
+      emit('entities_accumulated', {
+        newEntities: accumulation.newEntitiesDiscovered,
+        totalTracked: accumulation.totalEntitiesTracked,
+        constraints: accumulation.constraints,
+      });
     }
 
     // --------------------------------------------------------------------------
@@ -376,6 +398,10 @@ export class ChronoAgent {
       assistantFullText = `I evaluated current live sources regarding your query.\n\n${deltaSummary ? deltaSummary.verdict : 'Verified with latest web search data.'}`;
       emit('token', { chunk: assistantFullText });
     }
+
+    // Citation Sanitization & Referential Integrity Guardrail
+    const sanitization = this.sanitizer.sanitize(assistantFullText, citations);
+    assistantFullText = sanitization.sanitizedText;
 
     // Grounding & Attribution Verification
     const groundingResult = this.groundingVerifier.verify(

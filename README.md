@@ -110,15 +110,18 @@ chronosearch/
 │   │   ├── temporal.ts         # High-precision calendar grounding engine
 │   │   ├── planner.ts          # Search query planner & intent decomposer
 │   │   ├── bitemporal.ts       # Formal Snodgrass bitemporal delta lattice operator
+│   │   ├── arbitrator.ts       # Authority-weighted Bayesian conflict arbitrator
 │   │   ├── coverage.ts         # Epistemic coverage analyzer (adaptive gap filling)
 │   │   ├── entity-graph.ts     # Temporal Knowledge Graph & 20-user sales math
 │   │   ├── grounding.ts        # Citation Grounding Verifier (attribution scoring)
+│   │   ├── sanitizer.ts        # Citation referential integrity guardrail
 │   │   ├── diff-engine.ts      # Delta / Staleness comparator
 │   │   └── types.ts            # Shared types and event interfaces
 │   ├── eval/
 │   │   └── benchmark.ts        # Automated evaluation benchmark suite (`npm run eval`)
 │   ├── memory/
 │   │   ├── store.ts            # Persistent episodic memory with inverted indexing
+│   │   ├── entity-accumulator.ts # Multi-turn live conversational entity graph
 │   │   └── seeds.ts            # Pre-seeded test benchmark conversations
 │   ├── search/
 │   │   ├── tool.ts             # The unified `web_search` tool
@@ -139,6 +142,9 @@ chronosearch/
     ├── search.test.ts          # Search tool & deduplication tests
     ├── ranker.test.ts          # Source authority & temporal decay ranker tests
     ├── bitemporal.test.ts      # Snodgrass bitemporal delta operator tests
+    ├── arbitrator.test.ts      # Evidence conflict arbitration tests
+    ├── entity-accumulator.test.ts # Multi-turn conversational entity graph tests
+    ├── sanitizer.test.ts       # Citation guardrail & repair tests
     ├── entity-graph.test.ts    # 20-user CRM math & Postgres hosting tests
     ├── grounding.test.ts       # Citation grounding & attribution tests
     └── agent.test.ts           # End-to-end dataset evaluation tests
@@ -148,7 +154,7 @@ chronosearch/
 
 ## Running Tests
 
-Run the full 13-test test suite:
+Run the full 16-test unit test suite:
 
 ```bash
 npm test

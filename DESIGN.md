@@ -91,11 +91,11 @@ ChronoSearch decomposes every turn into an observable, 7-phase state machine DAG
 5. **Epistemic Coverage Assessor (`src/agent/coverage.ts`)**:
    Verifies whether retrieved evidence sufficiently covers every target entity. If an entity is missing from the search results, it dynamically triggers a targeted adaptive follow-up hop with bounded depth ($d \le 1$), maintaining accuracy without latency runaways.
 
-6. **Formal Bitemporal Delta Operator (`src/agent/bitemporal.ts` & `entity-graph.ts`)**:
-   Implements Richard Snodgrass's Bitemporal Database Model, separating Valid Time ($V_t$) from Transaction Time ($T_t$). Applies differential operator $\Delta(S_1, S_2)$ across both requested dimensions: **Pricing Delta** (computing exact 20-user seat math) and **Product Releases** (distinguishing major platform launches from minor AI copilot tweaks).
+6. **Formal Bitemporal Delta Operator & Evidence Arbitrator (`src/agent/bitemporal.ts` & `arbitrator.ts`)**:
+   Implements Richard Snodgrass's Bitemporal Database Model, separating Valid Time ($V_t$) from Transaction Time ($T_t$). When search results contain conflicting third-party pricing claims (e.g. outdated blogs claiming $50 vs vendor $20), the **Evidence Arbitrator** uses authority-weighted Bayesian clustering to prioritize canonical vendor evidence. Applies differential operator $\Delta(S_1, S_2)$ across both requested dimensions: **Pricing Delta** (computing exact 20-user seat math) and **Product Releases** (distinguishing major platform launches from minor AI copilot tweaks).
 
-7. **Citation Grounding Verifier & Streaming Synthesis (`src/agent/grounding.ts` & `agent.ts`)**:
-   Validates inline citations `[^1]`, `[^2]` against retrieved documents, computes a calibrated lexical attribution score (e.g. 85-98%), and streams the final answer token-by-token over Server-Sent Events (SSE).
+7. **Citation Grounding Verifier & Sanitizer (`src/agent/grounding.ts` & `sanitizer.ts`)**:
+   The **Citation Sanitizer** enforces strict referential integrity by intercepting and repairing hallucinated out-of-bounds citations before they reach the user. The **Grounding Verifier** calculates a calibrated lexical attribution score (e.g. 85-98%), streaming verified tokens via Server-Sent Events (SSE).
 
 ---
 

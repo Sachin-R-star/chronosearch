@@ -10,7 +10,7 @@
     "chat": "tsx src/cli.ts",
     "eval": "tsx src/eval/benchmark.ts",
     "build": "tsc",
-    "test": "tsx --test tests/temporal.test.ts tests/search.test.ts tests/ranker.test.ts tests/bitemporal.test.ts tests/entity-graph.test.ts tests/grounding.test.ts tests/agent.test.ts"
+    "test": "tsx --test tests/temporal.test.ts tests/search.test.ts tests/ranker.test.ts tests/bitemporal.test.ts tests/arbitrator.test.ts tests/entity-accumulator.test.ts tests/sanitizer.test.ts tests/entity-graph.test.ts tests/grounding.test.ts tests/agent.test.ts"
   },
   "keywords": [
     "ai-agent",
