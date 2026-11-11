@@ -46,6 +46,51 @@ function setupEventListeners() {
     startNewChat();
   });
 
+  // Time-travel date simulator
+  const datePicker = document.getElementById('reference-date-picker');
+  const resetDateBtn = document.getElementById('reset-date-btn');
+
+  if (datePicker) {
+    datePicker.addEventListener('change', async () => {
+      const selected = datePicker.value;
+      if (!selected) return;
+      try {
+        const res = await fetch('/api/temporal/override', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dateISO: selected }),
+        });
+        const data = await res.json();
+        if (data.temporal) {
+          systemTimeDisplayEl.textContent = data.temporal.todayHuman;
+          relativeAnchorPreviewEl.textContent = `Simulated: ${data.temporal.todayISO} (Grounding Shifted)`;
+        }
+      } catch (err) {
+        console.warn('Failed to set simulated date:', err);
+      }
+    });
+  }
+
+  if (resetDateBtn) {
+    resetDateBtn.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/temporal/override', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dateISO: null }),
+        });
+        const data = await res.json();
+        if (data.temporal) {
+          if (datePicker) datePicker.value = '';
+          systemTimeDisplayEl.textContent = data.temporal.todayHuman;
+          relativeAnchorPreviewEl.textContent = `Live Clock: ${data.temporal.todayISO} (${data.temporal.now.slice(11, 16)} UTC)`;
+        }
+      } catch (err) {
+        console.warn('Failed to reset date:', err);
+      }
+    });
+  }
+
   // Prompt chips
   document.querySelectorAll('.prompt-chip').forEach((chip) => {
     chip.addEventListener('click', () => {
@@ -225,6 +270,34 @@ function buildActivityCard(metadata) {
       <div class="activity-item">
         <span class="activity-icon">⚖️</span>
         <div style="color:${statusColor}; font-weight:500;">${escapeHtml(metadata.deltaSummary.verdict)}</div>
+      </div>
+    `);
+  }
+
+  if (metadata.groundingScore !== undefined) {
+    items.push(`
+      <div class="activity-item">
+        <span class="activity-icon">🎯</span>
+        <div>Citation Grounding Score: <span class="activity-badge" style="color:var(--accent-green); font-weight:600;">${metadata.groundingScore}% Verified</span> (Direct Source Attribution)</div>
+      </div>
+    `);
+  }
+
+  if (metadata.dagTrace && metadata.dagTrace.length > 0) {
+    items.push(`
+      <div class="activity-item">
+        <span class="activity-icon">📊</span>
+        <div style="width:100%;">
+          <div style="font-weight:600; margin-bottom:6px; font-size:11px; color:var(--text-muted);">State Machine Execution DAG:</div>
+          <div class="dag-pipeline-grid">
+            ${metadata.dagTrace.map((step) => `
+              <div class="dag-step-chip ${step.status}">
+                <span class="step-name">${escapeHtml(step.step)}</span>
+                <span class="step-time">${step.durationMs}ms</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
       </div>
     `);
   }

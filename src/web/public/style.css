@@ -667,3 +667,91 @@ body {
   color: var(--text-muted);
   margin: 10px 0;
 }
+.time-travel-control {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.time-travel-control label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.time-picker-row {
+  display: flex;
+  gap: 6px;
+}
+
+.time-picker-row input[type="date"] {
+  background: #11141b;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-main);
+  font-size: 11px;
+  padding: 4px 6px;
+  font-family: var(--font-mono);
+  outline: none;
+  flex: 1;
+}
+
+.btn-micro {
+  background: #1e2430;
+  border: 1px solid #2d3446;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-micro:hover {
+  background: var(--accent-primary);
+  color: #fff;
+}
+.dag-pipeline-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dag-step-chip {
+  background: #151a24;
+  border: 1px solid #232a3b;
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.dag-step-chip .step-name {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.dag-step-chip .step-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.dag-step-chip.adaptive_hop {
+  border-color: var(--accent-amber);
+}
+
+.dag-step-chip.adaptive_hop .step-time {
+  color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.1);
+}

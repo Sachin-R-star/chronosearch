@@ -37,6 +37,18 @@ app.get('/api/status', (_req: Request, res: Response) => {
   });
 });
 
+// POST /api/temporal/override (Interactive time-travel evaluation simulator)
+app.post('/api/temporal/override', (req: Request, res: Response) => {
+  const { dateISO } = req.body;
+  if (dateISO) {
+    defaultTemporalEngine.setReferenceDate(new Date(`${dateISO}T12:00:00Z`));
+  } else {
+    defaultTemporalEngine.setReferenceDate(new Date());
+  }
+  const frame = defaultTemporalEngine.getTemporalFrame();
+  res.json({ success: true, temporal: frame });
+});
+
 // GET /api/sessions
 app.get('/api/sessions', (_req: Request, res: Response) => {
   const sessions = defaultMemoryStore.getAllSessions();

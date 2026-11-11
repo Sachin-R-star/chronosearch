@@ -32,6 +32,13 @@
         <div class="card-label">CURRENT SYSTEM TIME</div>
         <div id="system-time-display" class="time-value">Loading...</div>
         <div id="relative-anchor-preview" class="anchor-value">Grounding: Live Node Clock</div>
+        <div class="time-travel-control">
+          <label for="reference-date-picker">Anchor Simulation:</label>
+          <div class="time-picker-row">
+            <input type="date" id="reference-date-picker" title="Simulate different evaluation dates" />
+            <button id="reset-date-btn" class="btn-micro" title="Reset to live node clock">Live</button>
+          </div>
+        </div>
       </div>
 
       <div class="quick-test-section">

@@ -3,6 +3,7 @@ import {
   AgentMessage,
   Citation,
   ConversationSession,
+  DAGStepTelemetry,
   DeltaSummary,
   SearchResultItem,
   TemporalAnchor,
@@ -13,6 +14,9 @@ import { SearchPlanner, defaultPlanner } from './planner.js';
 import { WebSearchTool, defaultSearchTool } from '../search/tool.js';
 import { DiffEngine, defaultDiffEngine } from './diff-engine.js';
 import { PageScraper, defaultScraper } from '../search/scraper.js';
+import { TemporalEntityGraph, defaultEntityGraph } from './entity-graph.js';
+import { EpistemicCoverageAnalyzer, defaultCoverageAnalyzer } from './coverage.js';
+import { CitationGroundingVerifier, defaultGroundingVerifier } from './grounding.js';
 import { LLMProvider } from '../llm/types.js';
 import { defaultLLMProvider } from '../llm/factory.js';
 
@@ -22,6 +26,9 @@ export interface AgentOptions {
   planner?: SearchPlanner;
   searchTool?: WebSearchTool;
   diffEngine?: DiffEngine;
+  entityGraph?: TemporalEntityGraph;
+  coverageAnalyzer?: EpistemicCoverageAnalyzer;
+  groundingVerifier?: CitationGroundingVerifier;
   scraper?: PageScraper;
   llm?: LLMProvider;
 }
@@ -32,6 +39,9 @@ export class ChronoAgent {
   private planner: SearchPlanner;
   private searchTool: WebSearchTool;
   private diffEngine: DiffEngine;
+  private entityGraph: TemporalEntityGraph;
+  private coverageAnalyzer: EpistemicCoverageAnalyzer;
+  private groundingVerifier: CitationGroundingVerifier;
   private scraper: PageScraper;
   private llm: LLMProvider;
 
@@ -41,6 +51,9 @@ export class ChronoAgent {
     this.planner = options.planner || defaultPlanner;
     this.searchTool = options.searchTool || defaultSearchTool;
     this.diffEngine = options.diffEngine || defaultDiffEngine;
+    this.entityGraph = options.entityGraph || defaultEntityGraph;
+    this.coverageAnalyzer = options.coverageAnalyzer || defaultCoverageAnalyzer;
+    this.groundingVerifier = options.groundingVerifier || defaultGroundingVerifier;
     this.scraper = options.scraper || defaultScraper;
     this.llm = options.llm || defaultLLMProvider;
   }
@@ -51,10 +64,7 @@ export class ChronoAgent {
     onEvent?: AgentEventCallback
   ): Promise<AgentMessage> {
     const startTime = Date.now();
-    let temporalTime = 0;
-    let memoryTime = 0;
-    let searchTime = 0;
-    let scrapeTime = 0;
+    const dagTrace: DAGStepTelemetry[] = [];
 
     const emit = (type: any, data: any) => {
       if (onEvent) {
@@ -64,7 +74,7 @@ export class ChronoAgent {
 
     emit('start', { query: userQuery, sessionId });
 
-    // Ensure session exists
+    // Session resolution
     let activeSession: ConversationSession | null = null;
     if (sessionId) {
       activeSession = this.memory.getSession(sessionId);
@@ -73,11 +83,21 @@ export class ChronoAgent {
       activeSession = this.memory.createSession('New Conversation', sessionId);
     }
 
-    // 1. Temporal Anchoring
+    // --------------------------------------------------------------------------
+    // Phase 1: Temporal Grounding & Calendar Interval Algebra
+    // --------------------------------------------------------------------------
     const t0 = Date.now();
     const temporalAnchor = this.temporal.parseTemporalExpression(userQuery);
     const temporalFrame = this.temporal.getTemporalFrame();
-    temporalTime = Date.now() - t0;
+    const temporalDuration = Date.now() - t0;
+    dagTrace.push({
+      step: 'Temporal Grounding',
+      durationMs: temporalDuration,
+      status: 'completed',
+      details: temporalAnchor
+        ? `"${temporalAnchor.expression}" -> ${temporalAnchor.anchorDate} (${temporalAnchor.relativeDays}d offset)`
+        : 'Live reference frame anchored',
+    });
 
     emit('temporal_resolved', {
       anchor: temporalAnchor,
@@ -85,7 +105,9 @@ export class ChronoAgent {
       calendarAnchors: temporalFrame.calendarAnchors,
     });
 
-    // 2. Episodic Memory Recall
+    // --------------------------------------------------------------------------
+    // Phase 2: Inverted Index Episodic Memory Recall
+    // --------------------------------------------------------------------------
     const m0 = Date.now();
     let recalledContext = '';
     let recalledSession: ConversationSession | null = null;
@@ -127,14 +149,24 @@ export class ChronoAgent {
         });
       }
     }
-    memoryTime = Date.now() - m0;
+    const memoryDuration = Date.now() - m0;
+    dagTrace.push({
+      step: 'Episodic Memory Recall',
+      durationMs: memoryDuration,
+      status: plan.requiresMemoryRecall ? 'completed' : 'skipped',
+      details: recalledSession ? `Recalled "${recalledSession.title}"` : 'No past context required',
+    });
 
-    // Re-plan with recalled context
+    // Refine plan using recalled context
     const refinedPlan = this.planner.plan(userQuery, temporalAnchor, recalledContext);
 
-    // 3. Web Search Execution (Parallel)
-    const allSearchResults: SearchResultItem[] = [];
+    // --------------------------------------------------------------------------
+    // Phase 3: Speculative Multi-Query Fan-Out (Parallel Web Search)
+    // --------------------------------------------------------------------------
+    let allSearchResults: SearchResultItem[] = [];
     const searchQueriesIssued: string[] = [];
+    let searchDuration = 0;
+    let scrapeDuration = 0;
 
     if (refinedPlan.requiresSearch && refinedPlan.searchQueries.length > 0) {
       emit('search_planned', {
@@ -158,22 +190,30 @@ export class ChronoAgent {
       }));
 
       const toolResults = await this.searchTool.executeParallel(toolInputs);
-      const deduplicated = this.searchTool.deduplicateResults(toolResults);
-      allSearchResults.push(...deduplicated);
-      searchTime = Date.now() - s0;
+      allSearchResults = this.searchTool.deduplicateResults(toolResults);
+      searchDuration = Date.now() - s0;
 
       emit('search_completed', {
         resultCount: allSearchResults.length,
         sources: allSearchResults.map((r) => ({ title: r.title, url: r.url, source: r.source })),
-        totalLatencyMs: searchTime,
+        totalLatencyMs: searchDuration,
       });
 
-      // Deep scrape top 2 relevant URLs in parallel with strict timeout
+      dagTrace.push({
+        step: 'Speculative Search Fan-Out',
+        durationMs: searchDuration,
+        status: 'completed',
+        details: `${refinedPlan.searchQueries.length} parallel queries -> ${allSearchResults.length} sources`,
+      });
+
+      // ------------------------------------------------------------------------
+      // Phase 4: Parallel Deep DOM & Table Extraction
+      // ------------------------------------------------------------------------
       if (allSearchResults.length > 0) {
         const sc0 = Date.now();
-        const topUrls = allSearchResults.slice(0, 2).map((r) => r.url);
+        const topUrls = allSearchResults.slice(0, 3).map((r) => r.url);
         const scraped = await this.scraper.scrapeMultiple(topUrls);
-        scrapeTime = Date.now() - sc0;
+        scrapeDuration = Date.now() - sc0;
 
         for (const r of allSearchResults) {
           if (scraped[r.url] && scraped[r.url].success) {
@@ -186,26 +226,83 @@ export class ChronoAgent {
 
         emit('page_scraped', {
           scrapedCount: Object.keys(scraped).length,
-          latencyMs: scrapeTime,
+          latencyMs: scrapeDuration,
+        });
+
+        dagTrace.push({
+          step: 'Deep DOM Table Extraction',
+          durationMs: scrapeDuration,
+          status: 'completed',
+          details: `Parsed ${Object.keys(scraped).length} pages for pricing grids`,
         });
       }
     }
 
-    // 4. Delta / Change Detection Computation
+    // --------------------------------------------------------------------------
+    // Phase 5: Epistemic Coverage Assessment & Adaptive Hop
+    // --------------------------------------------------------------------------
+    const cov0 = Date.now();
+    let coverageAssessment: any = undefined;
+
+    if (refinedPlan.extractedEntities.length > 0 && allSearchResults.length > 0) {
+      const coverage = await this.coverageAnalyzer.assessAndFillGaps(
+        refinedPlan.extractedEntities,
+        allSearchResults,
+        this.searchTool,
+        (adaptiveQuery) => {
+          emit('search_executing', { query: adaptiveQuery, purpose: 'adaptive_gap_fill' });
+          searchQueriesIssued.push(adaptiveQuery);
+        }
+      );
+
+      allSearchResults = coverage.results;
+      coverageAssessment = coverage.assessment;
+
+      emit('coverage_evaluated', coverageAssessment);
+    }
+    const coverageDuration = Date.now() - cov0;
+    dagTrace.push({
+      step: 'Epistemic Coverage Assessor',
+      durationMs: coverageDuration,
+      status: coverageAssessment?.adaptiveHopsExecuted ? 'adaptive_hop' : 'completed',
+      details: coverageAssessment
+        ? `Coverage: ${coverageAssessment.isFullyCovered ? '100% Complete' : 'Partial'} (${coverageAssessment.adaptiveHopsExecuted} hops)`
+        : 'Standard coverage',
+    });
+
+    // --------------------------------------------------------------------------
+    // Phase 6: Temporal Knowledge Graph Diffing
+    // --------------------------------------------------------------------------
+    const diff0 = Date.now();
     let deltaSummary: DeltaSummary | undefined;
+
     if (refinedPlan.isDeltaVerification && recalledContext) {
       const baselineDateStr = temporalAnchor ? temporalAnchor.anchorDate : 'the previous conversation';
-      deltaSummary = this.diffEngine.computeDelta(
+      deltaSummary = this.entityGraph.computeGraphDelta(
+        {
+          baselineDate: baselineDateStr,
+          currentDate: temporalFrame.todayHuman,
+          teamSize: 20,
+        },
         recalledContext,
-        allSearchResults,
-        baselineDateStr,
-        temporalFrame.todayHuman
+        allSearchResults
       );
 
       emit('delta_computed', deltaSummary);
     }
+    const diffDuration = Date.now() - diff0;
+    dagTrace.push({
+      step: 'Temporal Graph Diff Engine',
+      durationMs: diffDuration,
+      status: deltaSummary ? 'completed' : 'skipped',
+      details: deltaSummary
+        ? `Delta Verdict: ${deltaSummary.hasChanges ? 'Changes Detected' : 'Unchanged & Verified'}`
+        : 'No delta comparison required',
+    });
 
-    // 5. Build Citation Footnote Index
+    // --------------------------------------------------------------------------
+    // Phase 7: Footnote Indexing & Streaming LLM Synthesis
+    // --------------------------------------------------------------------------
     const citations: Citation[] = allSearchResults.slice(0, 6).map((item, idx) => ({
       index: idx + 1,
       title: item.title,
@@ -215,8 +312,13 @@ export class ChronoAgent {
       publishedDate: item.publishedDate,
     }));
 
-    // 6. Synthesize via Streaming LLM
-    const systemPrompt = this.buildSystemPrompt(temporalFrame, temporalAnchor, recalledContext, citations, deltaSummary);
+    const systemPrompt = this.buildSystemPrompt(
+      temporalFrame,
+      temporalAnchor,
+      recalledContext,
+      citations,
+      deltaSummary
+    );
 
     this.memory.addMessage(activeSession.id, {
       role: 'user',
@@ -246,25 +348,48 @@ export class ChronoAgent {
       emit('token', { chunk: assistantFullText });
     }
 
-    const totalLatency = Date.now() - startTime;
+    // Grounding & Attribution Verification
+    const groundingResult = this.groundingVerifier.verify(
+      assistantFullText,
+      allSearchResults,
+      citations
+    );
 
-    // 7. Save Assistant Message with full telemetry
+    emit('grounding_verified', {
+      score: groundingResult.groundingScore,
+      claimsChecked: groundingResult.totalClaimsChecked,
+    });
+
+    const totalLatency = Date.now() - startTime;
+    dagTrace.push({
+      step: 'Streaming LLM Synthesis',
+      durationMs: Math.max(0, totalLatency - (temporalDuration + memoryDuration + searchDuration + scrapeDuration + coverageDuration + diffDuration)),
+      status: 'completed',
+      details: `Grounding Score: ${groundingResult.groundingScore}%`,
+    });
+
+    // Persist Assistant Message
     const assistantMessage = this.memory.addMessage(activeSession.id, {
       role: 'assistant',
       content: assistantFullText,
       timestamp: new Date().toISOString(),
       metadata: {
-        citations,
+        citations: groundingResult.verifiedCitations,
         searchQueries: searchQueriesIssued,
         temporalAnchor: temporalAnchor || undefined,
         deltaSummary,
+        groundingScore: groundingResult.groundingScore,
+        dagTrace,
+        coverageAssessment,
         entitySnapshots: recalledSession?.entitySnapshots,
         latencyBreakdown: {
-          temporalMs: temporalTime,
-          memoryMs: memoryTime,
-          searchMs: searchTime,
-          scrapeMs: scrapeTime,
-          llmFirstTokenMs: Math.max(0, totalLatency - (temporalTime + memoryTime + searchTime + scrapeTime)),
+          temporalMs: temporalDuration,
+          memoryMs: memoryDuration,
+          searchMs: searchDuration,
+          scrapeMs: scrapeDuration,
+          coverageMs: coverageDuration,
+          diffMs: diffDuration,
+          llmFirstTokenMs: Math.max(0, totalLatency - (temporalDuration + memoryDuration + searchDuration + scrapeDuration + coverageDuration + diffDuration)),
           totalMs: totalLatency,
         },
         latencyMs: totalLatency,
@@ -274,9 +399,11 @@ export class ChronoAgent {
     emit('done', {
       messageId: assistantMessage.id,
       sessionId: activeSession.id,
-      citations,
+      citations: groundingResult.verifiedCitations,
       latencyMs: totalLatency,
       deltaSummary,
+      groundingScore: groundingResult.groundingScore,
+      dagTrace,
     });
 
     return assistantMessage;

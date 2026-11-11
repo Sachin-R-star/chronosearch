@@ -7,12 +7,15 @@ export interface Citation {
   domain: string;
   snippet?: string;
   publishedDate?: string;
+  matchedText?: string;
+  groundingConfidence?: number; // 0 to 1
 }
 
 export interface EntitySnapshot {
+  entityId?: string;
   name: string;
   category: 'crm' | 'database' | 'infra' | 'saas' | 'general';
-  baselineDate: string;
+  baselineDate: string; // ISO YYYY-MM-DD
   attributes: {
     pricingTiers?: Record<string, string | number>;
     teamSizeCalculations?: Record<string, string | number>;
@@ -22,6 +25,13 @@ export interface EntitySnapshot {
   };
 }
 
+export interface DAGStepTelemetry {
+  step: string;
+  durationMs: number;
+  status: 'completed' | 'skipped' | 'adaptive_hop';
+  details?: string;
+}
+
 export interface MessageMetadata {
   citations?: Citation[];
   searchQueries?: string[];
@@ -29,11 +39,16 @@ export interface MessageMetadata {
   temporalAnchor?: TemporalAnchor;
   deltaSummary?: DeltaSummary;
   entitySnapshots?: EntitySnapshot[];
+  groundingScore?: number; // 0 - 100%
+  dagTrace?: DAGStepTelemetry[];
+  coverageAssessment?: CoverageAssessment;
   latencyBreakdown?: {
     temporalMs: number;
     memoryMs: number;
     searchMs: number;
     scrapeMs: number;
+    coverageMs: number;
+    diffMs: number;
     llmFirstTokenMs: number;
     totalMs: number;
   };
@@ -65,7 +80,7 @@ export interface TemporalAnchor {
   dayOfWeek: string;  // e.g. "Tuesday"
   relativeDays: number; // e.g. -7
   isPastReference: boolean;
-  searchFilterAfter?: string; // ISO YYYY-MM-DD for date-bounded searches
+  searchFilterAfter?: string; // ISO YYYY-MM-DD
 }
 
 export interface SearchQuery {
@@ -90,6 +105,13 @@ export interface SearchToolResult {
   results: SearchResultItem[];
   latencyMs: number;
   provider: string;
+}
+
+export interface CoverageAssessment {
+  isFullyCovered: boolean;
+  missingEntities: string[];
+  adaptiveHopsExecuted: number;
+  targetEntities: string[];
 }
 
 export interface DeltaFact {
@@ -123,7 +145,9 @@ export type AgentEventType =
   | 'search_executing'
   | 'search_completed'
   | 'page_scraped'
+  | 'coverage_evaluated'
   | 'delta_computed'
+  | 'grounding_verified'
   | 'token'
   | 'done'
   | 'error';
